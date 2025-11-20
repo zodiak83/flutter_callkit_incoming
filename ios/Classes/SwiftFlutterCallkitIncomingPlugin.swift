@@ -622,25 +622,35 @@ public class SwiftFlutterCallkitIncomingPlugin: NSObject, FlutterPlugin, CXProvi
     
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         guard let call = self.callManager.callWithUUID(uuid: action.callUUID) else {
-            if(self.answerCall == nil && self.outgoingCall == nil){
-                sendEvent(SwiftFlutterCallkitIncomingPlugin.ACTION_CALL_TIMEOUT, self.data?.toJSON())
-            } else {
-                sendEvent(SwiftFlutterCallkitIncomingPlugin.ACTION_CALL_ENDED, self.data?.toJSON())
-            }
             action.fail()
             return
         }
+        
         call.endCall()
+        
+        // 종료하는 통화가 어떤 통화인지 확인
+        let isAnsweredCall = (self.answerCall?.uuid == call.uuid)
+        let isOutgoingCall = (self.outgoingCall?.uuid == call.uuid)
+        
         self.callManager.removeCall(call)
-        if (self.answerCall == nil && self.outgoingCall == nil) {
-            sendEvent(SwiftFlutterCallkitIncomingPlugin.ACTION_CALL_DECLINE, self.data?.toJSON())
+        
+        // 답변한 통화나 발신 통화가 아니면 거절로 처리
+        if !isAnsweredCall && !isOutgoingCall {
+            sendEvent(SwiftFlutterCallkitIncomingPlugin.ACTION_CALL_DECLINE, call.data.toJSON())
             if let appDelegate = UIApplication.shared.delegate as? CallkitIncomingAppDelegate {
                 appDelegate.onDecline(call, action)
             } else {
                 action.fulfill()
             }
-        }else {
-            self.answerCall = nil
+        } else {
+            // 답변한 통화나 발신 통화를 종료
+            if isAnsweredCall {
+                self.answerCall = nil
+            }
+            if isOutgoingCall {
+                self.outgoingCall = nil
+            }
+            
             sendEvent(SwiftFlutterCallkitIncomingPlugin.ACTION_CALL_ENDED, call.data.toJSON())
             if let appDelegate = UIApplication.shared.delegate as? CallkitIncomingAppDelegate {
                 appDelegate.onEnd(call, action)
